@@ -89,8 +89,8 @@ export default defineContentScript({
           const currentHeight = document.body.scrollHeight
           const currentlyAtBottom = window.innerHeight + window.scrollY >= document.body.scrollHeight - 150
           
-          if (currentlyAtBottom && currentHeight === previousHeight && retryCount >= 2) {
-            sendLog('Reached the absolute bottom of the pending list. Completing...', 'success')
+          if (currentlyAtBottom && currentHeight === previousHeight && retryCount >= 4) {
+            sendLog('Reached the absolute bottom of the pending list (no more posts loading). Completing...', 'success')
             chrome.runtime.sendMessage({ type: 'REACHED_END' }).catch(() => {})
             return
           }
