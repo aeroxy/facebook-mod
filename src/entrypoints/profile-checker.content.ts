@@ -55,11 +55,11 @@ export default defineContentScript({
       const isAlreadySuspended = allText.some(t => t === 'Unsuspend')
 
       if (isAlreadySuspended) {
-        sendLog(`${userName} is already suspended. Skipping...`, 'info')
+        sendLog(`${userName} is already suspended. Declining pending post...`, 'warning')
         chrome.runtime.sendMessage({
           type: 'PROFILE_CHECK_RESULT',
           url: window.location.href,
-          status: 'skipped',
+          status: 'already_suspended',
           userName
         })
         return

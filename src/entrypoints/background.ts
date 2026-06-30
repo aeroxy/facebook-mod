@@ -191,6 +191,20 @@ export default defineBackground(() => {
           if (autoModEnabled) {
             setTimeout(requestNextProfile, 1500)
           }
+        } else if (status === 'already_suspended') {
+          logToSidepanel(`${userName || 'user'} is already suspended. Declining pending post...`, 'warning')
+          updateStatsInSidepanel({ checked: 1, skipped: 1 })
+          
+          // Decline post for this user on the pending list tab
+          if (scraperTabId !== null) {
+            chrome.tabs.sendMessage(scraperTabId, { type: 'DECLINE_POST_FOR_USER', userName: userName, profileUrl: url }).catch(() => {})
+          }
+          
+          cleanupCurrentCheck()
+          // Wait slightly longer (e.g. 3s) so the decline button click is seen clearly before moving to the next profile
+          if (autoModEnabled) {
+            setTimeout(requestNextProfile, 3000)
+          }
         } else if (status === 'suspended') {
           logToSidepanel(`SUSPENDED ${userName || 'user'} successfully for 28 Days (Double-posting)`, 'success')
           updateStatsInSidepanel({ checked: 1, suspended: 1 })
