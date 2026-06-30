@@ -33,7 +33,7 @@ export default defineContentScript({
         processNextSingleProfile()
       } else if (message.type === 'DECLINE_POST_FOR_USER') {
         if (!autoModEnabled) return
-        declinePostForUser(message.userName)
+        declinePostForUser(message.userName, message.profileUrl)
       } else if (message.type === 'TOGGLE_AUTOMOD') {
         autoModEnabled = message.enabled
         activeGroupId = message.groupId || ''
@@ -68,43 +68,51 @@ export default defineContentScript({
           }
         }).catch(() => {})
       } else {
+        // No new profile on screen. Let's scroll down to load more.
         const previousHeight = document.body.scrollHeight
-        const isCurrentlyAtBottom = window.innerHeight + window.scrollY >= document.body.scrollHeight - 100
+        const isAtBottom = window.innerHeight + window.scrollY >= document.body.scrollHeight - 150
 
-        if (isCurrentlyAtBottom && retryCount >= 1) {
-          sendLog('Reached the absolute bottom of the pending posts list. All posts checked!', 'success')
+        if (isAtBottom && retryCount >= 4) {
+          sendLog('Reached the absolute bottom of the pending posts list (no more posts loading). All posts checked!', 'success')
           chrome.runtime.sendMessage({ type: 'REACHED_END' }).catch(() => {})
           return
         }
 
-        // No new profile on screen, scroll and retry
-        if (retryCount < 5) {
-          sendLog('No new profile cards found on screen. Scrolling to load more...', 'info')
-          window.scrollTo({
-            top: document.body.scrollHeight,
-            behavior: 'smooth'
-          })
+        sendLog(`No new profile cards found on screen (Attempt ${retryCount + 1}/4). Scrolling to load more...`, 'info')
+        window.scrollTo({
+          top: document.body.scrollHeight,
+          behavior: 'smooth'
+        })
+
+        // Wait 3 seconds for content to load and render, then retry
+        setTimeout(() => {
+          const currentHeight = document.body.scrollHeight
+          const currentlyAtBottom = window.innerHeight + window.scrollY >= document.body.scrollHeight - 150
           
-          // Wait 2.5 seconds for new content to load, then retry
-          setTimeout(() => {
-            const isStillAtBottom = window.innerHeight + window.scrollY >= document.body.scrollHeight - 100
-            if (isStillAtBottom && document.body.scrollHeight === previousHeight) {
-              sendLog('Reached the absolute bottom of the pending list (no more posts loading). Completing...', 'success')
-              chrome.runtime.sendMessage({ type: 'REACHED_END' }).catch(() => {})
-              return
-            }
-            processNextSingleProfile(retryCount + 1)
-          }, 2500)
-        } else {
-          sendLog('Reached scroll timeout or end of list.', 'warning')
-          chrome.runtime.sendMessage({ type: 'REACHED_END' }).catch(() => {})
-        }
+          if (currentlyAtBottom && currentHeight === previousHeight && retryCount >= 2) {
+            sendLog('Reached the absolute bottom of the pending list. Completing...', 'success')
+            chrome.runtime.sendMessage({ type: 'REACHED_END' }).catch(() => {})
+            return
+          }
+          
+          processNextSingleProfile(retryCount + 1)
+        }, 3000)
       }
     }
 
-    function declinePostForUser(userName: string) {
+    function declinePostForUser(userName: string, profileUrl?: string) {
       const cards = getPendingPostCards()
-      const matches = cards.filter(c => c.user.toLowerCase().includes(userName.toLowerCase()) || userName.toLowerCase().includes(c.user.toLowerCase()))
+      let matches = []
+
+      if (profileUrl) {
+        const cleanTarget = getCleanProfileUrl(profileUrl)
+        matches = cards.filter(c => getCleanProfileUrl(c.profileUrl) === cleanTarget)
+      }
+
+      // Fallback to name matching if no profileUrl match
+      if (matches.length === 0) {
+        matches = cards.filter(c => c.user.toLowerCase().includes(userName.toLowerCase()) || userName.toLowerCase().includes(c.user.toLowerCase()))
+      }
       
       if (matches.length > 0) {
         matches.forEach(match => {
@@ -130,7 +138,15 @@ export default defineContentScript({
 
     function getPendingPostCards() {
       const userLinks = Array.from(document.querySelectorAll('a'))
-        .filter(a => a.href.includes('/user/') && a.innerText.trim());
+        .filter(a => {
+          const href = a.href
+          const text = a.innerText.trim()
+          if (!text) return false
+          
+          return href.includes('/user/') || 
+                 href.includes('profile.php?id=') || 
+                 href.includes('/people/')
+        })
       
       const cards: Array<{ user: string; profileUrl: string; element: HTMLElement }> = []
       
@@ -141,7 +157,8 @@ export default defineContentScript({
             .some(btn => btn.innerText.includes('Approve'));
           if (hasApprove) {
             const cleanUrl = getCleanProfileUrl(a.href)
-            if (!cards.some(c => getCleanProfileUrl(c.profileUrl) === cleanUrl)) {
+            // Deduplicate by parent element (ensuring we map the actual first author link to the card)
+            if (!cards.some(c => c.element === parent)) {
               cards.push({
                 user: a.innerText.trim(),
                 profileUrl: a.href,

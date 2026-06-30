@@ -197,7 +197,7 @@ export default defineBackground(() => {
           
           // Decline post for this user on the pending list tab
           if (scraperTabId !== null) {
-            chrome.tabs.sendMessage(scraperTabId, { type: 'DECLINE_POST_FOR_USER', userName: userName }).catch(() => {})
+            chrome.tabs.sendMessage(scraperTabId, { type: 'DECLINE_POST_FOR_USER', userName: userName, profileUrl: url }).catch(() => {})
           }
           
           cleanupCurrentCheck()

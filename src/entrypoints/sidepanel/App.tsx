@@ -293,7 +293,7 @@ export default function App() {
       </div>
 
       {/* Log Console */}
-      <div className="mt-4 flex-1 flex flex-col gap-2 p-3 bg-black text-green-400 font-mono rounded-lg border border-border shadow-sm overflow-hidden text-xs">
+      <div className="mt-4 flex-1 flex flex-col gap-2 p-3 bg-black text-green-400 font-mono rounded-lg border border-border shadow-sm overflow-hidden text-xs select-text">
         <div className="flex items-center justify-between pb-1 border-b border-green-900">
           <span className="flex items-center gap-1 font-semibold text-xxs">
             <FileText className="w-3 h-3" />
